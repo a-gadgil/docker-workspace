@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,7 +25,7 @@ func main() {
 
 	version := os.Getenv("APP_VERSION")
 	if version == "" {
-		version = "v2.0.0" // Updated lab version
+		version = "v3.0.0" // Bumped version for new image build
 	}
 
 	environment := os.Getenv("ENVIRONMENT")
@@ -46,24 +45,18 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		resp := AppResponse{
 			Status:      "success",
-			Message:     "Go application running smoothly inside Docker!",
+			Message:     "Go application v3 running smoothly inside Docker!",
 			Version:     version,
 			Environment: environment,
 			Hostname:    hostname,
 			Timestamp:   time.Now(),
 		}
+
 		json.NewEncoder(w).Encode(resp)
 	})
 
-	// Health Check Endpoint for Docker Probes
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"healthy","container":"%s"}`, hostname)
-	})
-
-	log.Printf("Starting Go Lab Service [%s] on port %s (Host: %s)...", version, port, hostname)
+	log.Printf("Server starting on port %s...", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+		log.Fatalf("Server failed: %v", err)
 	}
 }
