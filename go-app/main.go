@@ -1,62 +1,84 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
 )
 
-type AppResponse struct {
-	Status      string    `json:"status"`
-	Message     string    `json:"message"`
-	Version     string    `json:"version"`
-	Environment string    `json:"environment"`
-	Hostname    string    `json:"hostname"`
-	Timestamp   time.Time `json:"timestamp"`
-}
+var ctx = context.Background()
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	dbUser := getEnv("DB_USER", "root")
+	dbPass := getEnv("DB_PASSWORD", "rootpassword")
+	dbHost := getEnv("DB_HOST", "mysql")
+	dbName := getEnv("DB_NAME", "appdb")
+	redisAddr := getEnv("REDIS_ADDR", "redis:6379")
 
-	version := os.Getenv("APP_VERSION")
-	if version == "" {
-		version = "v3.0.0" // Bumped version for new image build
-	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", dbUser, dbPass, dbHost, dbName)
 
-	environment := os.Getenv("ENVIRONMENT")
-	if environment == "" {
-		environment = "docker-lab"
+	// Connect to MySQL with retry mechanism
+	var db *sql.DB
+	var err error
+	for i := 0; i < 15; i++ {
+		db, err = sql.Open("mysql", dsn)
+		if err == nil {
+			err = db.Ping()
+			if err == nil {
+				break
+			}
+		}
+		log.Println("Waiting for MySQL database to become ready...")
+		time.Sleep(2 * time.Second)
 	}
-
-	hostname, err := os.Hostname()
 	if err != nil {
-		hostname = "unknown-container"
+		log.Fatalf("Could not connect to MySQL: %v", err)
+	}
+	defer db.Close()
+
+	// Connect to Redis
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	if _, err := rdb.Ping(ctx).Result(); err != nil {
+		log.Fatalf("Could not connect to Redis: %v", err)
 	}
 
-	// Root Endpoint
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Incoming request from %s on path %s", r.RemoteAddr, r.URL.Path)
-
-		w.Header().Set("Content-Type", "application/json")
-		resp := AppResponse{
-			Status:      "success",
-			Message:     "Go application v3 running smoothly inside Docker!",
-			Version:     version,
-			Environment: environment,
-			Hostname:    hostname,
-			Timestamp:   time.Now(),
+		// Increment visitor count in Redis cache
+		count, err := rdb.Incr(ctx, "visits").Result()
+		if err != nil {
+			http.Error(w, "Redis error: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
-		json.NewEncoder(w).Encode(resp)
+		// Query current time from MySQL backend
+		var now time.Time
+		err = db.QueryRow("SELECT NOW()").Scan(&now)
+		if err != nil {
+			http.Error(w, "MySQL error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Fprintf(w, "🚀 Go App Stack Running via Docker Compose!\n")
+		fmt.Fprintf(w, "📊 Redis Visit Count: %d\n", count)
+		fmt.Fprintf(w, "🗄️ MySQL Database Time: %v\n", now)
 	})
 
-	log.Printf("Server starting on port %s...", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	log.Println("Go application server starting on port 8080...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func getEnv(key, fallback string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
 	}
+	return fallback
 }
