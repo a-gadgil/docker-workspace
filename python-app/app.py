@@ -1,57 +1,51 @@
-from flask import Flask, jsonify, request
 import os
-import socket
-import datetime
+import redis
+import psycopg2
+from flask import Flask
 
 app = Flask(__name__)
 
-# Fetch environment variables with robust defaults
-APP_VERSION = os.getenv("APP_VERSION", "v2.0.0")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "lab-testing")
-HOSTNAME = socket.gethostname()
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_NAME = os.getenv("DB_NAME", "appdb")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+
+def get_db_connection():
+    return psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        connect_timeout=3
+    )
+
+def get_redis_client():
+    return redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
 
 @app.route("/")
-def home():
-    """Root endpoint showing app identity and container hostname."""
-    return jsonify({
-        "service": "rilly-docker-lab-service",
-        "status": "online",
-        "message": "Welcome to the fully overhauled Python Docker lab application!",
-        "version": APP_VERSION,
-        "environment": ENVIRONMENT,
-        "container_hostname": HOSTNAME,
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    })
+def index():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT NOW();")
+        db_time = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    except Exception as e:
+        db_time = f"Database Error: {e}"
 
-@app.route("/health")
-def health():
-    """Standard health check endpoint for container probes."""
-    return jsonify({
-        "status": "healthy",
-        "uptime_check": "passed",
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }), 200
+    try:
+        r = get_redis_client()
+        count = r.incr("hits")
+    except Exception as e:
+        count = f"Redis Error: {e}"
 
-@app.route("/info")
-def info():
-    """System and runtime diagnostic info."""
-    return jsonify({
-        "python_version": os.sys.version,
-        "platform": os.sys.platform,
-        "server_hostname": HOSTNAME,
-        "active_version": APP_VERSION
-    })
-
-@app.route("/echo", methods=["POST"])
-def echo_payload():
-    """Allows testing POST requests and JSON payload handling inside containers."""
-    incoming_data = request.get_json(silent=True) or {}
-    return jsonify({
-        "received_data": incoming_data,
-        "processed_by_container": HOSTNAME,
-        "status": "success"
-    }), 201
+    return f"""
+    🚀 Flask App Stack Running via Docker Compose!<br>
+    📊 Redis Visit Count: <b>{count}</b><br>
+    🗄️ PostgreSQL Database Time: <b>{db_time}</b>
+    """
 
 if __name__ == "__main__":
-    print(f"Starting Rilly Lab Service [{APP_VERSION}] on host {HOSTNAME}...")
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8080)
