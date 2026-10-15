@@ -1,24 +1,24 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 fn handle_client(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
-    stream.read(&mut buffer).unwrap();
+    let _ = stream.read(&mut buffer);
 
-    let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n<html><body><h1>Hello from Rust Container!</h1><p>Powered by a zero-dependency TCP server.</p></body></html>";
-    
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
+    let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"healthy\",\"language\":\"rust\",\"tier\":\"micro-service\"}";
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
 }
 
 fn main() {
-    let listener = TcpListener::bind("0.0.0.0:8080").unwrap();
-    println!("Rust micro-service listening on port 8080...");
+    let listener = TcpListener::bind("0.0.0.0:8081").unwrap();
+    println!("Rust micro-service listening on port 8081...");
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                std::thread::spawn(|| {
+                thread::spawn(|| {
                     handle_client(stream);
                 });
             }
