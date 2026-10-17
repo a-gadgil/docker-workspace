@@ -1,6 +1,11 @@
 [package]
-name = "rust-app"
+name = "rust_app"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.0", features = ["full"] }
+axum = "0.7"
+sqlx = { version = "0.8", features = ["mysql", "runtime-tokio", "tls-rustls"] }
+memcache = "0.18"
+serde = { version = "1.0", features = ["derive"] }
