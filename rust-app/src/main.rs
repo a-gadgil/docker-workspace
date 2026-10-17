@@ -1,30 +1,36 @@
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::thread;
+use axum::{routing::get, Router};
+use sqlx::MySqlPool;
+use std::env;
 
-fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0; 1024];
-    let _ = stream.read(&mut buffer);
+#[tokio::main]
+async fn main() {
+    // 1. Read environment variables defined in Docker Compose
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "mysql://root:secretpassword@localhost:3306/app_db".to_string());
+    let memcached_url = env::var("MEMCACHED_URL")
+        .unwrap_or_else(|_| "tcp://localhost:11211".to_string());
+    // 2. Connect to MySQL Pool
+    println!("Connecting to MySQL...");
+    let db_pool = MySqlPool::connect(&database_url)
+        .await
+        .expect("Failed to connect to MySQL");
+    println!("Successfully connected to MySQL!");
 
-    let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\":\"healthy\",\"language\":\"rust\",\"tier\":\"micro-service\"}";
-    let _ = stream.write_all(response.as_bytes());
-    let _ = stream.flush();
-}
+    // 3. Connect to Memcached
+    println!("Connecting to Memcached...");
+    let mut cache_client = memcache::Client::connect(memcached_url)
+        .expect("Failed to connect to Memcached");
+    
+    // Test write/read to Memcached (Fixed with [..])
+    cache_client.set("startup_key", &b"Hello from Rust & Memcached!"[..], 60).unwrap();
+    let val: String = cache_client.get("startup_key").unwrap().unwrap();
+    println!("Memcached test read: {}", val);
 
-fn main() {
-    let listener = TcpListener::bind("0.0.0.0:8081").unwrap();
-    println!("Rust micro-service listening on port 8081...");
+    // 4. Build Axum Router
+    let app = Router::new().route("/", get(|| async { "Rust 3-Tier App is running with MySQL & Memcached!" }));
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                thread::spawn(|| {
-                    handle_client(stream);
-                });
-            }
-            Err(e) => {
-                eprintln!("Connection failed: {}", e);
-            }
-        }
-    }
+    // 5. Bind and Listen
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    println!("Server listening on port 8080...");
+    axum::serve(listener, app).await.unwrap();
 }
