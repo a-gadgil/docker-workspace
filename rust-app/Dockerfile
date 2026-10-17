@@ -1,35 +1,30 @@
-# Stage 1: Build the Rust binary
-FROM rust:1.75-alpine AS builder
+# Stage 1: Build the binary with cached dependencies
+FROM rust:alpine AS builder
+
+# Install build tools AND static OpenSSL libraries required for musl static linking
+RUN apk add --no-cache pkgconfig openssl-dev openssl-libs-static build-base
 
 WORKDIR /app
 
-# Copy dependency manifests
-COPY Cargo.toml ./
+# 1. Copy Cargo.toml and optional Cargo.lock safely
+COPY Cargo.toml Cargo.lock* ./
 
-# Create a dummy src/main.rs to build dependencies and cache them
+# 2. Create a dummy main.rs so Cargo can download and build dependencies without your source code yet
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 
-# Copy actual source code
+# 3. Now copy your actual source code over the dummy src
 COPY src ./src
 
-# Touch main.rs to ensure the compiler recognizes source changes and builds the real binary
+# 4. Touch main.rs to force Cargo to recognize the real code change, then build
 RUN touch src/main.rs
 RUN cargo build --release
 
-# Stage 2: Runtime image
+# Stage 2: Runtime image (Ultra-lightweight)
 FROM alpine:3.19
-
-# Add CA certificates for secure network calls if needed
-RUN apk add --no-cache ca-certificates
-
+RUN apk add --no-cache openssl ca-certificates
 WORKDIR /app
+COPY --from=builder /app/target/release/rust_app /app/rust_app
 
-# Copy the compiled release binary from the builder stage
-COPY --from=builder /app/target/release/rust-app /app/rust-app
-
-# Expose port 8081 to match the TCP listener in main.rs
-EXPOSE 8081
-
-# Run the binary
-CMD ["./rust-app"]
+EXPOSE 8080
+CMD ["./rust_app"]
