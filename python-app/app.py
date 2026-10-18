@@ -5,47 +5,28 @@ from flask import Flask
 
 app = Flask(__name__)
 
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_NAME = os.getenv("DB_NAME", "appdb")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-
-def get_db_connection():
-    return psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        connect_timeout=3
-    )
-
-def get_redis_client():
-    return redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
+DATABASE_URL = os.getenv("DATABASE_URL")
+REDIS_URL = os.getenv("REDIS_URL")
 
 @app.route("/")
 def index():
+    # Test Postgres Connection
+    db_status = "Connected"
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT NOW();")
-        db_time = cur.fetchone()[0]
-        cur.close()
+        conn = psycopg2.connect(DATABASE_URL)
         conn.close()
     except Exception as e:
-        db_time = f"Database Error: {e}"
+        db_status = f"Error: {e}"
 
+    # Test Redis Connection
+    redis_status = "Connected"
     try:
-        r = get_redis_client()
-        count = r.incr("hits")
+        r = redis.Redis.from_url(REDIS_URL)
+        r.ping()
     except Exception as e:
-        count = f"Redis Error: {e}"
+        redis_status = f"Error: {e}"
 
-    return f"""
-    🚀 Flask App Stack Running via Docker Compose!<br>
-    📊 Redis Visit Count: <b>{count}</b><br>
-    🗄️ PostgreSQL Database Time: <b>{db_time}</b>
-    """
+    return f"<h2>4-Tier Stack Operational!</h2><p>PostgreSQL: {db_status}</p><p>Redis: {redis_status}</p>"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=8000)
