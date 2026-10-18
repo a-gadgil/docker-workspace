@@ -1,53 +1,75 @@
-services:
-  app:
-    build: .
-    container_name: app-container
-    ports:
-      - "8080:8080"
-    environment:
-      - DB_HOST=db
-      - DB_NAME=appdb
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - REDIS_HOST=redis
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - app-net
-
-  db:
-    image: postgres:16-alpine
-    container_name: database-container
-    environment:
-      POSTGRES_DB: appdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-net
-
-  redis:
-    image: redis:alpine
-    container_name: redis-container
-    ports:
-      - "6379:6379"
-    networks:
-      - app-net
-
-volumes:
-  pg_data:
 
 networks:
   app-net:
     driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_server
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+      POSTGRES_DB: app_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis_server
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: python_server
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://app_user:app_password@db:5432/app_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-net
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_server
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+    networks:
+      - app-net
