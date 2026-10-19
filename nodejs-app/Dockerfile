@@ -1,20 +1,20 @@
-FROM node:18-alpine
+# Use lightweight Node.js image
+FROM node:20-alpine
 
-# For Debian/Ubuntu-based images
-RUN apk update && apk upgrade --no-cache
+# Set working directory inside container
+WORKDIR /usr/src/app
 
-WORKDIR /app
-
-# Copy dependency manifests first
+# Copy dependency manifests first to leverage Docker layer caching
 COPY package*.json ./
 
-# Cache layer: This step re-runs ONLY if package.json or package-lock.json changes
-RUN npm ci --only=production
+# Install dependencies
+RUN npm install
 
-# Copy the rest of the application code
-# Cache layer: Modifying files in src/ will break cache starting FROM THIS POINT onwards
+# Copy the rest of the application source code (including src/)
 COPY . .
 
+# Expose the application port
 EXPOSE 3000
 
+# Command to run the application from the src directory
 CMD ["node", "src/index.js"]
