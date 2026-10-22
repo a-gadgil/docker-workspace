@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,49 +10,55 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
-	dbHost := os.Getenv("DB_HOST")
-	dbUser := os.Getenv("DB_USER")
-	dbPass := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+	// Read connection strings from environment variables defined in Docker Compose
+	mysqlDSN := os.Getenv("MYSQL_DSN")
+	redisAddr := os.Getenv("REDIS_ADDR")
+	mongoURI := os.Getenv("MONGO_URI")
+	esURL := os.Getenv("ES_URL")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?parseTime=true", dbUser, dbPass, dbHost, dbName)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	// Connect to MySQL with retry
-	var db *sql.DB
-	var err error
-	for i := 1; i <= 5; i++ {
-		db, err = sql.Open("mysql", dsn)
-		if err == nil {
-			if err = db.Ping(); err == nil {
-				break
-			}
-		}
-		log.Printf("Attempt %d: Waiting for MySQL...", i)
-		time.Sleep(3 * time.Second)
+	// 1. Test MySQL Connection
+	db, err := sql.Open("mysql", mysqlDSN)
+	if err == nil && db.PingContext(ctx) == nil {
+		log.Println("[+] Successfully connected to MySQL")
+	} else {
+		log.Printf("[-] MySQL connection warning: %v", err)
 	}
-	if err != nil {
-		log.Fatalf("Could not connect to MySQL: %v", err)
-	}
-	log.Println("Connected to MySQL successfully!")
 
-	// Connect to Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr: fmt.Sprintf("%s:6379", os.Getenv("REDIS_HOST")),
+	// 2. Test Redis Connection
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	if _, err := rdb.Ping(ctx).Result(); err == nil {
+		log.Println("[+] Successfully connected to Redis")
+	} else {
+		log.Printf("[-] Redis connection warning: %v", err)
+	}
+
+	// 3. Test MongoDB Connection
+	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	if err == nil && mongoClient.Ping(ctx, nil) == nil {
+		log.Println("[+] Successfully connected to MongoDB")
+	} else {
+		log.Printf("[-] MongoDB connection warning: %v", err)
+	}
+
+	// 4. Log Elasticsearch Endpoint Status
+	log.Printf("[*] Elasticsearch target endpoint configured at: %s", esURL)
+
+	// Simple HTTP Health & Status Server
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("5-Tier App Stack is Healthy and Running!"))
 	})
-	ctx := context.Background()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Could not connect to Redis: %v", err)
+
+	log.Println("[*] Go application server starting on port 8080...")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
-	log.Println("Connected to Redis successfully!")
-
-	// Simple HTTP endpoint
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello from Go 3-Tier App! Connected to MySQL & Redis successfully.")
-	})
-
-	log.Println("Server running on port 8080...")
-	log.Fatal(http.ListenAndServe(":8080", nil))
 }
