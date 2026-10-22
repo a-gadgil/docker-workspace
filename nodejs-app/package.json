@@ -1,4 +1,13 @@
 {
+  "name": "nodejs-production-app",
+  "version": "1.0.0",
+  "description": "Production-grade Node.js container lab",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
   "name": "node-postgres-redis-app",
   "version": "1.0.0",
   "description": "Daily practice lab Node.js app with Postgres and Redis",
