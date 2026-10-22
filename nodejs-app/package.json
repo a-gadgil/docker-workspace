@@ -1,16 +1,12 @@
 {
-  "name": "node-devops-innerloop",
+  "name": "nodejs-production-app",
   "version": "1.0.0",
-  "description": "Node.js app for DevOps local inner loop practice",
+  "description": "Production-grade Node.js container lab",
   "main": "src/index.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "test": "node --test || echo 'No test suite specified' && exit 0"
+    "start": "node src/index.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "pg": "^8.11.0"
+    "express": "^4.19.2"
   }
 }
