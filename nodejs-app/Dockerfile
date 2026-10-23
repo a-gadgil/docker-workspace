@@ -1,4 +1,25 @@
 FROM node:18-alpine
+# --- Stage 1: Build & Install Dependencies ---
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+
+# --- Stage 2: Runtime Production Image ---
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# Create a non-root user for security (fixing Trivy warnings!)
+RUN addgroup -g 1001 nodegroup && \
+    adduser -u 1001 -G nodegroup -S nodeuser
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY src ./src
+COPY package.json ./
+
+USER nodeuser
+# Use lightweight Node.js image
+FROM node:20-alpine
 
 # For Debian/Ubuntu-based images
 RUN apk update && apk upgrade --no-cache
