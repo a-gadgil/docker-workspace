@@ -1,3 +1,4 @@
+FROM node:18-alpine
 # --- Stage 1: Build & Install Dependencies ---
 FROM node:20-alpine AS builder
 WORKDIR /app
@@ -20,16 +21,19 @@ USER nodeuser
 # Use lightweight Node.js image
 FROM node:20-alpine
 
-# Set working directory inside container
-WORKDIR /usr/src/app
+# For Debian/Ubuntu-based images
+RUN apk update && apk upgrade --no-cache
 
-# Copy dependency manifests first to leverage Docker layer caching
+WORKDIR /app
+
+# Copy dependency manifests first
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Cache layer: This step re-runs ONLY if package.json or package-lock.json changes
+RUN npm ci --only=production
 
-# Copy the rest of the application source code (including src/)
+# Copy the rest of the application code
+# Cache layer: Modifying files in src/ will break cache starting FROM THIS POINT onwards
 COPY . .
 
 # Expose the application port

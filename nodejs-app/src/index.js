@@ -18,71 +18,65 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 const { Pool } = require('pg');
-const { createClient } = require('redis');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
+const APP_VERSION = process.env.APP_VERSION || 'v1.0.1';
 
-// PostgreSQL Connection Pool using Compose service name 'postgres'
+// Database connection pool using environment variables
 const pool = new Pool({
-  host: process.env.DB_HOST || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
-  user: process.env.DB_USER || 'app_user',
-  password: process.env.DB_PASSWORD || 'secret_password',
-  database: process.env.DB_NAME || 'app_db',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
+  database: process.env.DB_NAME || 'devops_db',
 });
 
-// Redis Client using Compose service name 'redis'
-const redisClient = createClient({
-  url: `redis://${process.env.REDIS_HOST || 'redis'}:${process.env.REDIS_PORT || 6379}`
-});
+// Middleware to parse JSON
+app.use(express.json());
 
-redisClient.on('error', (err) => console.error('Redis Client Error', err));
-
-// Initialize connections and start server
-async function startApp() {
+// Root Endpoint
+app.get('/', async (req, res) => {
   try {
-    // Connect to Redis
-    await redisClient.connect();
-    console.log('Connected to Redis successfully');
-
-    // Test Postgres Connection & create a sample table if it doesn't exist
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS visits (
-        id SERIAL PRIMARY KEY,
-        count INT NOT NULL,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('Connected to PostgreSQL successfully');
-
-    app.get('/', async (req, res) => {
-      try {
-        // Increment visit counter in Redis cache
-        const cachedVisits = await redisClient.incr('visits_count');
-
-        // Log or fetch from Postgres for demonstration
-        const dbResult = await pool.query('SELECT NOW()');
-
-        res.json({
-          message: 'Welcome to the Docker Practice Lab!',
-          redis_visits_counter: cachedVisits,
-          postgres_time: dbResult.rows[0].now,
-        });
-      } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Internal Server Error' });
-      }
+    const dbResult = await pool.query('SELECT NOW()');
+    res.json({
+      status: 'running',
+      message: 'Node.js connected to PostgreSQL database successfully!',
+      version: APP_VERSION,
+      dbTime: dbResult.rows[0].now,
     });
-
-    app.listen(port, () => {
-      console.log(`App running on port ${port}`);
-    });
-
   } catch (err) {
-    console.error('Failed to start application:', err);
-    process.exit(1);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to establish connection to PostgreSQL database',
+      version: APP_VERSION,
+      error: err.message,
+    });
   }
-}
+});
 
+// Health Check Endpoint (useful for Docker/Kubernetes health checks)
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'UP', database: 'connected' });
+  } catch (err) {
+    res.status(503).json({ status: 'DOWN', database: 'disconnected', error: err.message });
+  }
+});
+
+// Start Server
+const server = app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT} (Version: ${APP_VERSION})`);
+});
+
+// Graceful Shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server and DB pool');
+  server.close(async () => {
+    await pool.end();
+    console.log('HTTP server and DB pool closed');
+    process.exit(0);
+  });
+});
 startApp();

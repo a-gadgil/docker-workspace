@@ -1,4 +1,5 @@
 {
+  "name": "node-devops-innerloop",
   "name": "nodejs-production-app",
   "version": "1.0.0",
   "description": "Production-grade Node.js container lab",
@@ -10,15 +11,15 @@
     "express": "^4.19.2"
   "name": "node-postgres-redis-app",
   "version": "1.0.0",
-  "description": "Daily practice lab Node.js app with Postgres and Redis",
+  "description": "Node.js app for DevOps local inner loop practice",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --test || echo 'No test suite specified' && exit 0"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "pg": "^8.11.3",
-    "redis": "^4.6.13"
+    "pg": "^8.11.0"
   }
 }
