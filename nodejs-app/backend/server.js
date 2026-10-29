@@ -21,7 +21,7 @@ app.get('/api/data', async (req, res) => {
     try {
         // Test DB query
         const dbResult = await pool.query('SELECT NOW()');
-        
+
         // Test Redis cache increment
         const visits = await redisClient.incr('visits');
 

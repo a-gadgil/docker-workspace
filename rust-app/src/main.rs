@@ -20,7 +20,7 @@ async fn main() {
     println!("Connecting to Memcached...");
     let mut cache_client = memcache::Client::connect(memcached_url)
         .expect("Failed to connect to Memcached");
-    
+
     // Test write/read to Memcached (Fixed with [..])
     cache_client.set("startup_key", &b"Hello from Rust & Memcached!"[..], 60).unwrap();
     let val: String = cache_client.get("startup_key").unwrap().unwrap();
