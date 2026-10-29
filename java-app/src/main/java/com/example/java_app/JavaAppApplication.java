@@ -13,7 +13,7 @@ public class JavaAppApplication {
     public static void main(String[] args) throws IOException {
         int port = 8080;
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        
+
         // Root endpoint
         server.createContext("/", new HttpHandler() {
             @Override
