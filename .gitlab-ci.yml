@@ -36,7 +36,7 @@ build-image:
 trivy-scan:
   stage: security
   image:
-    name: aquasecurity/trivy:latest
+    name: aquasec/trivy:latest
     entrypoint: [""]
   services:
     - name: docker:24.0.5-dind
