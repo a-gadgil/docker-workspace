@@ -32,8 +32,9 @@ build_image:
 
 trivy_scan:
   stage: scan
-  image: aquasec/trivy:latest
-  entrypoint: [""]
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
   dependencies:
     - build_image
   script:
