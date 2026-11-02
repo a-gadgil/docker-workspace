@@ -25,12 +25,26 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates
 
-WORKDIR /root/
+WORKDIR /app
 
-COPY --from=builder /app/server .
+# Install CA certificates for outbound TLS connections if required
+RUN apk --no-cache add ca-certificates
 
+# Security Best Practice: Run as a non-root user (UID 10001 to match your Kubernetes securityContext)
+RUN addgroup -g 10001 appgroup && \
+    adduser -u 10001 -G appgroup -D appuser
+
+# Copy the compiled binary from the builder stage with correct ownership
+COPY --chown=appuser:appgroup --from=builder /app/server /app/server
+
+# Ensure the binary is executable
+RUN chmod +x /app/server
+
+# Switch to non-root user
+USER appuser
+
+# Expose the application port
 EXPOSE 8080
 
-USER 10001:10001
-
-CMD ["./server"]
+# Command to run the application using absolute path
+CMD ["/app/server"]
