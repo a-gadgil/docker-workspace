@@ -1,0 +1,64 @@
+stages:
+  - lint
+  - build
+  - security
+  - push
+
+variables:
+  DOCKER_IMAGE_NAME: "$DOCKER_HUB_USERNAME/go-app"
+
+# 1. Linting Stage
+golangci-lint:
+  stage: lint
+  image: golangci/golangci-lint:v1.60-alpine
+  before_script:
+    - cd go-app
+  script:
+    - golangci-lint run ./...
+
+# 2. Build Stage
+build-image:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  script:
+    - cd go-app
+    - docker build -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA -t $DOCKER_IMAGE_NAME:latest .
+    - docker save $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA > /tmp/image.tar
+  artifacts:
+    paths:
+      - /tmp/image.tar
+    expire_in: 1 hour
+
+# 3. Security Scanning Stage (Trivy Gate)
+trivy-scan:
+  stage: security
+  image:
+    name: aquasecurity/trivy:latest
+    entrypoint: [""]
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker load < /tmp/image.tar
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+
+# 4. Push to Docker Hub Stage (Only runs on main branch after passing all gates)
+push-to-dockerhub:
+  stage: push
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+  script:
+    - docker load < /tmp/image.tar
+    - echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+    - docker push $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $DOCKER_IMAGE_NAME:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
