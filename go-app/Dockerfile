@@ -1,27 +1,29 @@
 # ==========================================
-# Stage 1: Build Stage
+# Build Stage
 # ==========================================
-FROM golang:1.22-alpine AS builder
+
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-# Install git or necessary certificate packages if needed
-RUN apk add --no-cache git
+# Install dependencies
 
-# Copy dependency manifests first to leverage Docker layer caching
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
-# Copy the rest of the application source code
-COPY main.go ./
+# Copy source code and build statically linked binary
 
-# Build a statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server main.go
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server main.go
+
 
 # ==========================================
 # Runtime Stage
 # ==========================================
-FROM alpine:3.19
+
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 

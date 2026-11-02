@@ -1,0 +1,58 @@
+stages:
+  - lint
+  - build
+  - scan
+  - push
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  IMAGE_NAME: "$DOCKERHUB_USERNAME/go-app"
+
+golangci-lint:
+  stage: lint
+  image: golangci/golangci-lint:v1.64-alpine
+  script:
+    - cd go-app
+    - golangci-lint run ./...
+
+build_image:
+  stage: build
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      command: ["--tls=false"]
+  script:
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA ./go-app
+    - docker save $IMAGE_NAME:$CI_COMMIT_SHA -o go-app-image.tar
+  artifacts:
+    paths:
+      - go-app-image.tar
+    expire_in: 1 hour
+
+trivy_scan:
+  stage: scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  dependencies:
+    - build_image
+  script:
+    - trivy image --input go-app-image.tar --exit-code 1 --severity HIGH,CRITICAL
+
+push_image:
+  stage: push
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      command: ["--tls=false"]
+  dependencies:
+    - build_image
+  script:
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker load < go-app-image.tar
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHA $IMAGE_NAME:latest
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $IMAGE_NAME:latest
+  only:
+    - main
