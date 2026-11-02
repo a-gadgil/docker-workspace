@@ -10,7 +10,7 @@ variables:
 # 1. Linting Stage
 golangci-lint:
   stage: lint
-  image: golangci/golangci-lint:v1.60-alpine
+  image: golangci/golangci-lint:v1.64-alpine
   before_script:
     - cd go-app
   script:
