@@ -1,64 +1,56 @@
 stages:
   - lint
   - build
-  - security
+  - scan
   - push
 
 variables:
-  DOCKER_IMAGE_NAME: "$DOCKER_HUB_USERNAME/go-app"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  IMAGE_NAME: "$DOCKERHUB_USERNAME/go-app"
 
-# 1. Linting Stage
 golangci-lint:
   stage: lint
   image: golangci/golangci-lint:v1.64-alpine
-  before_script:
-    - cd go-app
   script:
+    - cd go-app
     - golangci-lint run ./...
 
-# 2. Build Stage
-build-image:
+build_image:
   stage: build
-  image: docker:24.0.5
+  image: docker:27-cli
   services:
-    - name: docker:24.0.5-dind
-      alias: docker
+    - name: docker:27-dind
+      command: ["--tls=false"]
   script:
-    - cd go-app
-    - docker build -t $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA -t $DOCKER_IMAGE_NAME:latest .
-    - docker save $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA > /tmp/image.tar
+    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA ./go-app
+    - docker save $IMAGE_NAME:$CI_COMMIT_SHA -o go-app-image.tar
   artifacts:
     paths:
-      - /tmp/image.tar
+      - go-app-image.tar
     expire_in: 1 hour
 
-# 3. Security Scanning Stage (Trivy Gate)
-trivy-scan:
-  stage: security
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
-  services:
-    - name: docker:24.0.5-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2375/
-    DOCKER_TLS_CERTDIR: ""
+trivy_scan:
+  stage: scan
+  image: aquasec/trivy:latest
+  dependencies:
+    - build_image
   script:
-    - docker load < /tmp/image.tar
-    - trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
+    - trivy image --input go-app-image.tar --exit-code 1 --severity HIGH,CRITICAL
 
-# 4. Push to Docker Hub Stage (Only runs on main branch after passing all gates)
-push-to-dockerhub:
+push_image:
   stage: push
-  image: docker:24.0.5
+  image: docker:27-cli
   services:
-    - name: docker:24.0.5-dind
-      alias: docker
+    - name: docker:27-dind
+      command: ["--tls=false"]
+  dependencies:
+    - build_image
   script:
-    - docker load < /tmp/image.tar
-    - echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-    - docker push $DOCKER_IMAGE_NAME:$CI_COMMIT_SHA
-    - docker push $DOCKER_IMAGE_NAME:latest
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker load < go-app-image.tar
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHA $IMAGE_NAME:latest
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
+    - docker push $IMAGE_NAME:latest
+  only:
+    - main
