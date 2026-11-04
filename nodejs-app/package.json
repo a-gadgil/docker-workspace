@@ -1,5 +1,15 @@
 {
   "name": "node-devops-innerloop",
+  "name": "nodejs-production-app",
+  "version": "1.0.0",
+  "description": "Production-grade Node.js container lab",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  "name": "node-postgres-redis-app",
   "version": "1.0.0",
   "description": "Node.js app for DevOps local inner loop practice",
   "main": "src/index.js",

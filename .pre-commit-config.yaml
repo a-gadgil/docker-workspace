@@ -13,7 +13,7 @@ repos:
 
   # 2. Secret Leak Prevention
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.2
+    rev: v8.18.2
     hooks:
       - id: gitleaks
 
