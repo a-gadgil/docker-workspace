@@ -1,4 +1,17 @@
 repos:
+  # 1. Global Repository Hygiene & Safety
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^(node_modules/|java-app/.*/node_modules/)
+      - id: check-added-large-files
+        args: ['--maxkb=1024']
+
+  # 2. Secret Leak Prevention
   # ==========================================
   # 1. Universal Security & File Hygiene
   # ==========================================
@@ -7,6 +20,7 @@ repos:
     hooks:
       - id: gitleaks
 
+  # 3. Containerfile & Dockerfile Linting
   # ==========================================
   # 2. Infrastructure & Containers
   # ==========================================
@@ -14,6 +28,17 @@ repos:
     rev: v2.12.0
     hooks:
       - id: hadolint-docker
+        args: ['--failure-threshold', 'error']
+
+  # 4. Local Security & Configuration Scan (Optimized with skip directories)
+  - repo: local
+    hooks:
+      - id: trivy-fs
+        name: trivy-fs-scanner
+        entry: trivy fs --security-checks config,vuln --skip-dirs node_modules,vendor,.venv,dist,build .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
         files: Dockerfile$
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
