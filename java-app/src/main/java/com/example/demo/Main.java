@@ -5,4 +5,3 @@ public class Main {
         System.out.println("Hello from Java Microservice!");
     }
 }
-EOF
