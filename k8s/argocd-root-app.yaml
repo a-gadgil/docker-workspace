@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: go-app-gitops
+  name: multi-runtime-root
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: 'https://gitlab.com/thinksapient/docker-workspace.git'
-    targetRevision: 'infra/cd-workflow'
-    path: 'k8s'
+    targetRevision: HEAD
+    path: k8s
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: 'default'
+    namespace: default
   syncPolicy:
     automated:
       prune: true
