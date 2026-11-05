@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs-app
+  namespace: default
+  labels:
+    app: nodejs-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs-app
+  template:
+    metadata:
+      labels:
+        app: nodejs-app
+    spec:
+      containers:
+        - name: nodejs-app
+          image: docker.io/baremetal24/nodejs-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-app-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: nodejs-app
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
