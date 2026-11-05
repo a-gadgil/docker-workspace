@@ -1,0 +1,9 @@
+{
+  "name": "nodejs-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "lint": "echo \"No lint configured yet\" && exit 0"
+  },
+  "dependencies": {}
+}
