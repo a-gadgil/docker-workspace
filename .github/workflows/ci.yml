@@ -7,70 +7,151 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
+  # ==========================================
+  # STAGE 1: LANGUAGE-SPECIFIC LINTING
+  # ==========================================
+
+  lint-go:
     name: Lint Go Code
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64
           working-directory: go-app
 
-  build:
-    name: Build Docker Image
+  lint-python:
+    name: Lint Python Code
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Ruff & Lint
+        run: |
+          pip install ruff
+          cd python-app
+          ruff check .
+
+  lint-nodejs:
+    name: Lint Node.js Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies & Lint
+        run: |
+          cd nodejs-app
+          npm ci
+          npm run lint --if-present
+
+  lint-java:
+    name: Lint Java Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Verify with Maven
+        run: |
+          cd java-app
+          ./mvnw verify --fail-never
+
+  # ==========================================
+  # STAGE 2: MATRIX BUILD (All 4 Runtimes)
+  # ==========================================
+
+  build:
+    name: Build Docker Image (${{ matrix.app }})
+    needs: [lint-go, lint-python, lint-nodejs, lint-java]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - app: go-app
+            path: go-app
+          - app: python-app
+            path: python-app
+          - app: nodejs-app
+            path: nodejs-app
+          - app: java-app
+            path: java-app
     env:
-      IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/go-app"
+      IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.app }}"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} ./go-app
-          docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} -o go-app-image.tar
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} ./${{ matrix.path }}
+          docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} -o ${{ matrix.app }}-image.tar
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: go-app-image
-          path: go-app-image.tar
+          name: ${{ matrix.app }}-image
+          path: ${{ matrix.app }}-image.tar
           retention-days: 1
 
+  # ==========================================
+  # STAGE 3: MATRIX SECURITY SCAN
+  # ==========================================
+
   scan:
-    name: Trivy Security Scan
+    name: Trivy Security Scan (${{ matrix.app }})
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [go-app, python-app, nodejs-app, java-app]
     steps:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
-          name: go-app-image
+          name: ${{ matrix.app }}-image
 
       - name: Run Trivy scan on image tarball
         uses: aquasecurity/trivy-action@master
         with:
-          input: go-app-image.tar
+          input: ${{ matrix.app }}-image.tar
           format: 'table'
           exit-code: '1'
           severity: 'HIGH,CRITICAL'
 
+  # ==========================================
+  # STAGE 4: MATRIX REGISTRY PUSH (Main Only)
+  # ==========================================
+
   push:
-    name: Push to Docker Hub
+    name: Push to Docker Hub (${{ matrix.app }})
     needs: [build, scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [go-app, python-app, nodejs-app, java-app]
     env:
-      IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/go-app"
+      IMAGE_NAME: "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.app }}"
     steps:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
-          name: go-app-image
+          name: ${{ matrix.app }}-image
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -80,7 +161,7 @@ jobs:
 
       - name: Load, tag, and push image
         run: |
-          docker load < go-app-image.tar
+          docker load < ${{ matrix.app }}-image.tar
           docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest

@@ -7,52 +7,209 @@ stages:
 variables:
   DOCKER_HOST: tcp://docker:2375
   DOCKER_TLS_CERTDIR: ""
-  IMAGE_NAME: "$DOCKERHUB_USERNAME/go-app"
 
-golangci-lint:
+# ==========================================
+# STAGE 1: MULTI-RUNTIME LINTING JOBS
+# ==========================================
+
+lint:go:
   stage: lint
   image: golangci/golangci-lint:v1.64-alpine
   script:
     - cd go-app
     - golangci-lint run ./...
+  rules:
+    - changes:
+        - "go-app/**/*"
 
-build_image:
+lint:python:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - pip install ruff
+  script:
+    - cd python-app
+    - ruff check .
+  rules:
+    - changes:
+        - "python-app/**/*"
+
+lint:nodejs:
+  stage: lint
+  image: node:20-alpine
+  script:
+    - cd nodejs-app
+    - npm ci
+    - npm run lint --if-present
+  rules:
+    - changes:
+        - "nodejs-app/**/*"
+
+lint:java:
+  stage: lint
+  image: eclipse-temurin:21-jdk-alpine
+  script:
+    - cd java-app
+    - ./mvnw verify --fail-never # Or gradle check if using Gradle
+  rules:
+    - changes:
+        - "java-app/**/*"
+
+# ==========================================
+# STAGE 2: BUILD JOBS (Parameterized per App)
+# ==========================================
+
+.build_template: &build_definition
   stage: build
   image: docker:27-cli
   services:
     - name: docker:27-dind
       command: ["--tls=false"]
   script:
-    - docker build -t $IMAGE_NAME:$CI_COMMIT_SHA ./go-app
-    - docker save $IMAGE_NAME:$CI_COMMIT_SHA -o go-app-image.tar
+    - docker build -t $DOCKERHUB_USERNAME/$APP_NAME:$CI_COMMIT_SHA ./$APP_DIR
+    - docker save $DOCKERHUB_USERNAME/$APP_NAME:$CI_COMMIT_SHA -o ${APP_NAME}-image.tar
   artifacts:
     paths:
-      - go-app-image.tar
+      - ${APP_NAME}-image.tar
     expire_in: 1 hour
 
-trivy_scan:
+build:go-app:
+  <<: *build_definition
+  variables:
+    APP_NAME: "go-app"
+    APP_DIR: "go-app"
+  rules:
+    - changes:
+        - "go-app/**/*"
+
+build:python-app:
+  <<: *build_definition
+  variables:
+    APP_NAME: "python-app"
+    APP_DIR: "python-app"
+  rules:
+    - changes:
+        - "python-app/**/*"
+
+build:nodejs-app:
+  <<: *build_definition
+  variables:
+    APP_NAME: "nodejs-app"
+    APP_DIR: "nodejs-app"
+  rules:
+    - changes:
+        - "nodejs-app/**/*"
+
+build:java-app:
+  <<: *build_definition
+  variables:
+    APP_NAME: "java-app"
+    APP_DIR: "java-app"
+  rules:
+    - changes:
+        - "java-app/**/*"
+
+# ==========================================
+# STAGE 3: SECURITY SCANNING JOBS
+# ==========================================
+
+.scan_template: &scan_definition
   stage: scan
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
-  dependencies:
-    - build_image
   script:
-    - trivy image --input go-app-image.tar --exit-code 1 --severity HIGH,CRITICAL
+    - trivy image --input ${APP_NAME}-image.tar --exit-code 1 --severity HIGH,CRITICAL
 
-push_image:
+scan:go-app:
+  <<: *scan_definition
+  dependencies:
+    - build:go-app
+  variables:
+    APP_NAME: "go-app"
+  rules:
+    - changes:
+        - "go-app/**/*"
+
+scan:python-app:
+  <<: *scan_definition
+  dependencies:
+    - build:python-app
+  variables:
+    APP_NAME: "python-app"
+  rules:
+    - changes:
+        - "python-app/**/*"
+
+scan:nodejs-app:
+  <<: *scan_definition
+  dependencies:
+    - build:nodejs-app
+  variables:
+    APP_NAME: "nodejs-app"
+  rules:
+    - changes:
+        - "nodejs-app/**/*"
+
+scan:java-app:
+  <<: *scan_definition
+  dependencies:
+    - build:java-app
+  variables:
+    APP_NAME: "java-app"
+  rules:
+    - changes:
+        - "java-app/**/*"
+
+# ==========================================
+# STAGE 4: REGISTRY PUSH JOBS (Main Branch Only)
+# ==========================================
+
+.push_template: &push_definition
   stage: push
   image: docker:27-cli
   services:
     - name: docker:27-dind
       command: ["--tls=false"]
-  dependencies:
-    - build_image
   script:
     - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-    - docker load < go-app-image.tar
-    - docker tag $IMAGE_NAME:$CI_COMMIT_SHA $IMAGE_NAME:latest
-    - docker push $IMAGE_NAME:$CI_COMMIT_SHA
-    - docker push $IMAGE_NAME:latest
-  only:
-    - main
+    - docker load < ${APP_NAME}-image.tar
+    - docker tag $DOCKERHUB_USERNAME/$APP_NAME:$CI_COMMIT_SHA $DOCKERHUB_USERNAME/$APP_NAME:latest
+    - docker push $DOCKERHUB_USERNAME/$APP_NAME:$CI_COMMIT_SHA
+    - docker push $DOCKERHUB_USERNAME/$APP_NAME:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - "${APP_DIR}/**/*"
+
+push:go-app:
+  <<: *push_definition
+  dependencies:
+    - build:go-app
+  variables:
+    APP_NAME: "go-app"
+    APP_DIR: "go-app"
+
+push:python-app:
+  <<: *push_definition
+  dependencies:
+    - build:python-app
+  variables:
+    APP_NAME: "python-app"
+    APP_DIR: "python-app"
+
+push:nodejs-app:
+  <<: *push_definition
+  dependencies:
+    - build:nodejs-app
+  variables:
+    APP_NAME: "nodejs-app"
+    APP_DIR: "nodejs-app"
+
+push:java-app:
+  <<: *push_definition
+  dependencies:
+    - build:java-app
+  variables:
+    APP_NAME: "java-app"
+    APP_DIR: "java-app"
