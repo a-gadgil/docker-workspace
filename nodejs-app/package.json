@@ -1,9 +1,10 @@
 {
   "name": "nodejs-app",
   "version": "1.0.0",
+  "description": "Refactored Node.js microservice",
   "main": "index.js",
   "scripts": {
-    "lint": "echo \"No lint configured yet\" && exit 0"
+    "start": "node index.js"
   },
   "dependencies": {}
 }

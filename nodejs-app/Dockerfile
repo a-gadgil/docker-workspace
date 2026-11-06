@@ -1,9 +1,16 @@
-FROM node:20-alpine
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+FROM node:18-alpine
+
 WORKDIR /app
+
+# Copy dependency manifests
 COPY package*.json ./
+
+# Install production dependencies
 RUN npm ci --only=production
+
+# Copy application source code
 COPY . .
-USER appuser
-EXPOSE 3000
+
+EXPOSE 8080
+
 CMD ["node", "index.js"]
