@@ -22,7 +22,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:      "healthy",
 		Environment: env,
-		Service:     "go-app",
+		Service:     "go-secure-app",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -36,13 +36,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("Go application starting on port %s...", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	log.Println("Starting secure Go microservice on port 8080...")
+	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
