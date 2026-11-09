@@ -33,6 +33,16 @@ RUN chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+# Install CA certificates for outbound TLS connections if required
+RUN apk --no-cache add ca-certificates
+
+# Security Best Practice: Run as a non-root user (UID 10001 to match your Kubernetes securityContext)
+RUN addgroup -g 10001 appgroup && \
+    adduser -u 10001 -G appgroup -D appuser
 
 EXPOSE 8080
 
