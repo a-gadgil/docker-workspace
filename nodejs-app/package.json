@@ -1,10 +1,13 @@
 {
-  "name": "nodejs-app",
+  "name": "nodejs-secure-app",
   "version": "1.0.0",
-  "description": "Refactored Node.js microservice",
+  "description": "Production-grade Node.js microservice",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {}
 }

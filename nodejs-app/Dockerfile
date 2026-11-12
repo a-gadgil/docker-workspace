@@ -1,15 +1,13 @@
-FROM node:18-alpine
+# --- Secure Single-Stage or Streamlined Runtime Image ---
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy dependency manifests
-COPY package*.json ./
+# Create a non-root system user (node user is built into node:20-alpine)
+USER node
 
-# Install production dependencies
-RUN npm ci --only=production
-
-# Copy application source code
-COPY . .
+# Copy application files and set ownership directly
+COPY --chown=node:node package.json index.js ./
 
 EXPOSE 8080
 
