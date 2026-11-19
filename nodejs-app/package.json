@@ -1,13 +1,10 @@
 {
   "name": "nodejs-secure-app",
   "version": "1.0.0",
-  "description": "Production-grade Node.js microservice",
+  "description": "Containerized Node.js microservice",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "dependencies": {}
+  "license": "ISC"
 }
