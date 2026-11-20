@@ -1,28 +1,18 @@
-# Stage 1: Build stage
-FROM gcc:13-bookworm AS builder
-
-RUN apt-get update && apt-get install -y \
-    cmake \
-    && rm -rf /var/lib/apt/lists/*
+# --- Stage 2: Minimal Non-Root Runtime ---
+FROM alpine:3.20
 
 WORKDIR /app
-COPY CMakeLists.txt main.cpp ./
 
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build -j$(nproc)
+RUN apk add --no-cache libstdc++ && \
+    addgroup -g 1000 appgroup && \
+    adduser -u 1000 -G appgroup -s /bin/sh -D appuser
 
-# Stage 2: Runtime stage
-FROM debian:bookworm-slim
-
-RUN apt-get update && apt-get install -y \
-    libstdc++6 \
-    libc6 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
 COPY --from=builder /app/build/cpp_app /app/cpp_app
 
-EXPOSE 8080
-USER 10001:10001
+RUN chown -R appuser:appgroup /app
 
-ENTRYPOINT ["/app/cpp_app"]
+USER appuser
+
+EXPOSE 8080
+
+CMD ["/app/cpp_app"]
