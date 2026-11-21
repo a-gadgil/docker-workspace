@@ -1,6 +1,6 @@
 {
   "name": "nodejs-secure-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Containerized Node.js microservice",
   "main": "index.js",
   "scripts": {
