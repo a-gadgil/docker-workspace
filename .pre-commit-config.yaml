@@ -6,11 +6,13 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: \.(lock|sum)$
       - id: end-of-file-fixer
+        exclude: \.(lock|sum)$
       - id: check-yaml
         args: ['--unsafe']
       - id: check-json
-        exclude: ^(node_modules/|java-app/.*/node_modules/)
+        exclude: ^(node_modules/|.*/node_modules/|.*/target/)
       - id: check-added-large-files
         args: ['--maxkb=1024']
 
@@ -20,7 +22,7 @@ repos:
       - id: gitleaks
 
   # ==========================================
-  # 2. Infrastructure & Containers
+  # 2. Containers & Infrastructure
   # ==========================================
   - repo: https://github.com/hadolint/hadolint
     rev: v2.12.0
@@ -32,7 +34,7 @@ repos:
     hooks:
       - id: trivy-fs
         name: trivy-fs-scanner
-        entry: trivy fs --security-checks config,vuln --skip-dirs node_modules,vendor,.venv,dist,build .
+        entry: trivy fs --security-checks config,vuln --skip-dirs node_modules,vendor,.venv,target,dist,build .
         language: system
         pass_filenames: false
         stages: [pre-commit]
@@ -45,16 +47,22 @@ repos:
       - id: terraform_validate
 
   # ==========================================
-  # 3. Enterprise Runtime Linters & Formatters
+  # 3. Runtime Linters & Formatters
   # ==========================================
   # Go (go-app)
-
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
       - id: go-fmt
         files: ^go-app/.*\.go$
+
+  - repo: local
+    hooks:
       - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'cd go-app && golangci-lint run ./...'
+        language: system
+        pass_filenames: false
         files: ^go-app/.*\.go$
 
   # Python (python-app)
@@ -62,9 +70,9 @@ repos:
     rev: v0.3.0
     hooks:
       - id: ruff
-        files: ^python-app/
+        files: ^python-app/.*\.py$
       - id: ruff-format
-        files: ^python-app/
+        files: ^python-app/.*\.py$
 
   # Node.js (nodejs-app)
   - repo: local
@@ -73,4 +81,23 @@ repos:
         name: prettier
         entry: prettier --write
         language: system
-        files: ^nodejs-app/
+        files: ^nodejs-app/.*\.(js|mjs|cjs|ts|jsx|tsx|json|md|yml|yaml)$
+
+  # Rust (rust-app)
+  - repo: local
+    hooks:
+      - id: cargo-fmt-check
+        name: cargo-fmt-check
+        entry: bash -c 'cd rust-app && cargo fmt --check'
+        language: system
+        pass_filenames: false
+        files: ^rust-app/.*\.rs$
+
+  # Java (java-app) & C++ (cpp-app)
+  - repo: local
+    hooks:
+      - id: cpp-clang-format-check
+        name: cpp-clang-format-check
+        entry: clang-format --dry-run --Werror
+        language: system
+        files: ^cpp-app/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
